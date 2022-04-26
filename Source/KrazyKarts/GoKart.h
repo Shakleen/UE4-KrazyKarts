@@ -26,8 +26,6 @@ public:
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
 
-	void UpdateLocation(float DeltaTime);
-
 	// Called to bind functionality to input
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
@@ -47,6 +45,12 @@ private:
 	UPROPERTY(VisibleAnywhere, Category = "State variables")
 	FVector VelocityMetersPerSecond;
 
+	UPROPERTY(VisibleAnywhere, Category = "State variables")
+	float Throttle = 0.f;
+
 	UPROPERTY(EditAnywhere, Category = "Configuration Variables")
-	float MovementSpeed = 20.f;
+	float CarMassInKG = 1000.f;
+
+	UPROPERTY(EditAnywhere, Category = "Configuration Variables")
+	float MaxDrivingForceInNeutons = 10000.f;
 };
