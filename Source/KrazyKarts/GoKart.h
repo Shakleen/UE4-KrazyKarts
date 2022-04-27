@@ -37,6 +37,7 @@ private:
 
 	void ApplyRotation(float DeltaTime);
 	void UpdateLocationFromVelocity(float DeltaTime);
+	FVector GetRollingResistance();
 	FVector GetAirResistance();
 
 private:
@@ -72,4 +73,7 @@ private:
 
 	UPROPERTY(EditAnywhere, Category = "Configuration Variables")
 	float DragCoefficient = 16.f;
+
+	UPROPERTY(EditAnywhere, Category = "Configuration Variables")
+	float RollingResistanceCoefficient = 0.015f;
 };

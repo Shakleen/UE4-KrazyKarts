@@ -5,6 +5,7 @@
 #include "GameFramework/SpringArmComponent.h"
 #include "Camera/CameraComponent.h"
 #include "Components/BoxComponent.h"
+#include "Engine/World.h"
 
 // Sets default values
 AGoKart::AGoKart()
@@ -46,11 +47,26 @@ void AGoKart::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 	
-	FVector Force = GetActorForwardVector() * Throttle * MaxDrivingForceInNeutons + GetAirResistance();
+	FVector Force = GetActorForwardVector() * Throttle * MaxDrivingForceInNeutons;
+	Force += GetAirResistance();
+	Force += GetRollingResistance();
 	FVector Accelartion = Force / CarMassInKG;
 	VelocityMetersPerSecond = VelocityMetersPerSecond + Accelartion * DeltaTime;
+
 	ApplyRotation(DeltaTime);
 	UpdateLocationFromVelocity(DeltaTime);
+}
+
+FVector AGoKart::GetAirResistance()
+{
+	return -VelocityMetersPerSecond.SizeSquared() * DragCoefficient * VelocityMetersPerSecond.GetSafeNormal();
+}
+
+FVector AGoKart::GetRollingResistance()
+{
+	float AccelarationDueToGravity = -GetWorld()->GetGravityZ() / 100;
+	float NormalForce = CarMassInKG * AccelarationDueToGravity;
+	return - VelocityMetersPerSecond.GetSafeNormal() * NormalForce * RollingResistanceCoefficient;
 }
 
 void AGoKart::ApplyRotation(float DeltaTime)
@@ -72,11 +88,6 @@ void AGoKart::UpdateLocationFromVelocity(float DeltaTime)
 	{
 		VelocityMetersPerSecond = FVector::ZeroVector;
 	}
-}
-
-FVector AGoKart::GetAirResistance()
-{
-	return -VelocityMetersPerSecond.SizeSquared() * DragCoefficient * VelocityMetersPerSecond.GetSafeNormal();
 }
 
 // Called to bind functionality to input
