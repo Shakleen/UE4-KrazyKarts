@@ -69,7 +69,7 @@ private:
 	float MaxDrivingForceInNeutons = 10000.f;
 
 	UPROPERTY(EditAnywhere, Category = "Configuration Variables")
-	float MaxRotationInDegreesPerSecond = 90.f;
+	float MinTurningRadius = 10.f;
 
 	UPROPERTY(EditAnywhere, Category = "Configuration Variables")
 	float DragCoefficient = 16.f;
