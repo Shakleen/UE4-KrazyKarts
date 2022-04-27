@@ -35,6 +35,12 @@ private:
 	void MoveForward(float AxisValue);
 	void MoveRight(float AxisValue);
 
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_MoveForward(float AxisValue);
+
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_MoveRight(float AxisValue);
+
 	void ApplyRotation(float DeltaTime);
 	void UpdateLocationFromVelocity(float DeltaTime);
 	FVector GetRollingResistance();

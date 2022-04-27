@@ -6,6 +6,7 @@
 #include "Camera/CameraComponent.h"
 #include "Components/BoxComponent.h"
 #include "Engine/World.h"
+#include "DrawDebugHelpers.h"
 
 // Sets default values
 AGoKart::AGoKart()
@@ -35,14 +36,11 @@ AGoKart::AGoKart()
 	Camera->SetupAttachment(SpringArm, USpringArmComponent::SocketName);
 }
 
-// Called when the game starts or when spawned
 void AGoKart::BeginPlay()
 {
 	Super::BeginPlay();
-	
 }
 
-// Called every frame
 void AGoKart::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
@@ -55,6 +53,15 @@ void AGoKart::Tick(float DeltaTime)
 
 	ApplyRotation(DeltaTime);
 	UpdateLocationFromVelocity(DeltaTime);
+
+	DrawDebugString(
+		GetWorld(),
+		FVector(0, 0, 100),
+		UEnum::GetValueAsString(GetLocalRole()),
+		this,
+		FColor::Red,
+		DeltaTime
+	);
 }
 
 FVector AGoKart::GetAirResistance()
@@ -103,10 +110,31 @@ void AGoKart::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 void AGoKart::MoveForward(float AxisValue)
 {
 	Throttle = AxisValue;
+	Server_MoveForward(AxisValue);
 }
 
 void AGoKart::MoveRight(float AxisValue)
 {
 	SteeringThrow = AxisValue;
+	Server_MoveRight(AxisValue);
 }
 
+void AGoKart::Server_MoveForward_Implementation(float AxisValue)
+{
+	Throttle = AxisValue;
+}
+
+bool AGoKart::Server_MoveForward_Validate(float AxisValue)
+{
+	return true;
+}
+
+void AGoKart::Server_MoveRight_Implementation(float AxisValue)
+{
+	SteeringThrow = AxisValue;
+}
+
+bool AGoKart::Server_MoveRight_Validate(float AxisValue)
+{
+	return FMath::Abs(AxisValue) <= 1;
+}
