@@ -7,6 +7,7 @@
 #include "Components/BoxComponent.h"
 #include "Engine/World.h"
 #include "DrawDebugHelpers.h"
+#include "Net/UnrealNetwork.h"
 
 // Sets default values
 AGoKart::AGoKart()
@@ -34,6 +35,15 @@ AGoKart::AGoKart()
 	Camera->bUsePawnControlRotation = false;
 	Camera->FieldOfView = 90.f;
 	Camera->SetupAttachment(SpringArm, USpringArmComponent::SocketName);
+
+	bReplicates = true;
+}
+
+void AGoKart::GetLifetimeReplicatedProps(TArray< FLifetimeProperty >& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(AGoKart, ReplicatedLocation);
+	DOREPLIFETIME(AGoKart, ReplicatedRotation);
 }
 
 void AGoKart::BeginPlay()
@@ -53,6 +63,17 @@ void AGoKart::Tick(float DeltaTime)
 
 	ApplyRotation(DeltaTime);
 	UpdateLocationFromVelocity(DeltaTime);
+
+	if (HasAuthority())
+	{
+		ReplicatedLocation = GetActorLocation();
+		ReplicatedRotation = GetActorRotation();
+	}
+	else
+	{
+		SetActorLocation(ReplicatedLocation);
+		SetActorRotation(ReplicatedRotation);
+	}
 
 	DrawDebugString(
 		GetWorld(),
@@ -98,7 +119,6 @@ void AGoKart::UpdateLocationFromVelocity(float DeltaTime)
 	}
 }
 
-// Called to bind functionality to input
 void AGoKart::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);

@@ -82,4 +82,10 @@ private:
 
 	UPROPERTY(EditAnywhere, Category = "Configuration Variables")
 	float RollingResistanceCoefficient = 0.015f;
+
+	UPROPERTY(replicated)
+	FVector ReplicatedLocation;
+
+	UPROPERTY(replicated)
+	FRotator ReplicatedRotation;
 };
