@@ -8,6 +8,7 @@
 #include "Engine/World.h"
 #include "DrawDebugHelpers.h"
 #include "Net/UnrealNetwork.h"
+#include "GameFramework/GameStateBase.h"
 
 // Sets default values
 AGoKart::AGoKart()
@@ -39,40 +40,38 @@ AGoKart::AGoKart()
 	bReplicates = true;
 }
 
-void AGoKart::GetLifetimeReplicatedProps(TArray< FLifetimeProperty >& OutLifetimeProps) const
-{
-	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
-	DOREPLIFETIME(AGoKart, ReplicatedLocation);
-	DOREPLIFETIME(AGoKart, ReplicatedRotation);
-}
-
 void AGoKart::BeginPlay()
 {
 	Super::BeginPlay();
+
+	if (HasAuthority())
+	{
+		NetUpdateFrequency = 1;
+	}
+}
+
+void AGoKart::GetLifetimeReplicatedProps(TArray< FLifetimeProperty >& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(AGoKart, ServerState);
 }
 
 void AGoKart::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 	
-	FVector Force = GetActorForwardVector() * Throttle * MaxDrivingForceInNeutons;
-	Force += GetAirResistance();
-	Force += GetRollingResistance();
-	FVector Accelartion = Force / CarMassInKG;
-	VelocityMetersPerSecond = VelocityMetersPerSecond + Accelartion * DeltaTime;
-
-	ApplyRotation(DeltaTime);
-	UpdateLocationFromVelocity(DeltaTime);
-
-	if (HasAuthority())
+	if (IsLocallyControlled())
 	{
-		ReplicatedLocation = GetActorLocation();
-		ReplicatedRotation = GetActorRotation();
-	}
-	else
-	{
-		SetActorLocation(ReplicatedLocation);
-		SetActorRotation(ReplicatedRotation);
+		FGoKartMove Move = CreateMove(DeltaTime);
+
+		if (!HasAuthority())
+		{
+			UnackMoves.Add(Move);
+			UE_LOG(LogTemp, Warning, TEXT("Moev Queue Length: %d"), UnackMoves.Num());
+		}
+
+		Server_SendMove(Move);
+		SimulateMove(Move);
 	}
 
 	DrawDebugString(
@@ -83,6 +82,47 @@ void AGoKart::Tick(float DeltaTime)
 		FColor::Red,
 		DeltaTime
 	);
+}
+
+void AGoKart::OnRep_ServerState()
+{
+	SetActorTransform(ServerState.Transform);
+	VelocityMetersPerSecond = ServerState.VelocityMetersPerSecond;
+	ClearAcknowledgedMoves(ServerState.LastMove);
+
+	for (const FGoKartMove& Move : UnackMoves)
+	{
+		SimulateMove(Move);
+	}
+}
+
+void AGoKart::SimulateMove(const FGoKartMove& Move)
+{
+	FVector Force = GetActorForwardVector() * Move.Throttle * MaxDrivingForceInNeutons;
+	Force += GetAirResistance();
+	Force += GetRollingResistance();
+	FVector Accelartion = Force / CarMassInKG;
+	VelocityMetersPerSecond = VelocityMetersPerSecond + Accelartion * Move.DeltaTime;
+
+	ApplyRotation(Move);
+	UpdateLocationFromVelocity(Move.DeltaTime);
+}
+
+FGoKartMove AGoKart::CreateMove(float DeltaTime)
+{
+	FGoKartMove Move;
+	Move.DeltaTime = DeltaTime;
+	Move.SteeringThrow = SteeringThrow;
+	Move.Throttle = Throttle;
+	Move.Time = GetWorld()->GetGameState()->GetServerWorldTimeSeconds();
+	return Move;
+}
+
+void AGoKart::ClearAcknowledgedMoves(const FGoKartMove& LastMove)
+{
+	UnackMoves.RemoveAll([LastMove](const FGoKartMove& Move) {
+		return Move.Time < LastMove.Time;
+	});
 }
 
 FVector AGoKart::GetAirResistance()
@@ -97,10 +137,10 @@ FVector AGoKart::GetRollingResistance()
 	return - VelocityMetersPerSecond.GetSafeNormal() * NormalForce * RollingResistanceCoefficient;
 }
 
-void AGoKart::ApplyRotation(float DeltaTime)
+void AGoKart::ApplyRotation(const FGoKartMove& Move)
 {
-	float DeltaLocation = FVector::DotProduct(VelocityMetersPerSecond, GetActorForwardVector()) * DeltaTime;
-	float RotationAngle = DeltaLocation / MinTurningRadius * SteeringThrow;
+	float DeltaLocation = FVector::DotProduct(VelocityMetersPerSecond, GetActorForwardVector()) * Move.DeltaTime;
+	float RotationAngle = DeltaLocation / MinTurningRadius * Move.SteeringThrow;
 	FQuat RotationDelta(GetActorUpVector(), RotationAngle);
 	AddActorWorldRotation(RotationDelta);
 	VelocityMetersPerSecond = RotationDelta.RotateVector(VelocityMetersPerSecond);
@@ -130,31 +170,23 @@ void AGoKart::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 void AGoKart::MoveForward(float AxisValue)
 {
 	Throttle = AxisValue;
-	Server_MoveForward(AxisValue);
 }
 
 void AGoKart::MoveRight(float AxisValue)
 {
 	SteeringThrow = AxisValue;
-	Server_MoveRight(AxisValue);
 }
 
-void AGoKart::Server_MoveForward_Implementation(float AxisValue)
+void AGoKart::Server_SendMove_Implementation(FGoKartMove Move)
 {
-	Throttle = AxisValue;
+	SimulateMove(Move);
+
+	ServerState.LastMove = Move;
+	ServerState.Transform = GetActorTransform();
+	ServerState.VelocityMetersPerSecond = VelocityMetersPerSecond;
 }
 
-bool AGoKart::Server_MoveForward_Validate(float AxisValue)
+bool AGoKart::Server_SendMove_Validate(FGoKartMove Move)
 {
 	return true;
-}
-
-void AGoKart::Server_MoveRight_Implementation(float AxisValue)
-{
-	SteeringThrow = AxisValue;
-}
-
-bool AGoKart::Server_MoveRight_Validate(float AxisValue)
-{
-	return FMath::Abs(AxisValue) <= 1;
 }

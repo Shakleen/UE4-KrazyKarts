@@ -10,41 +10,72 @@ class UCameraComponent;
 class USpringArmComponent;
 class UBoxComponent;
 
+USTRUCT()
+struct FGoKartMove
+{
+	GENERATED_USTRUCT_BODY()
+
+public:
+	UPROPERTY()
+	float Throttle;
+
+	UPROPERTY()
+	float SteeringThrow;
+
+	UPROPERTY()
+	float DeltaTime;
+
+	UPROPERTY()
+	float Time;
+};
+
+USTRUCT()
+struct FGoKartState
+{
+	GENERATED_USTRUCT_BODY()
+
+public:
+	UPROPERTY()
+	FGoKartMove LastMove;
+
+	UPROPERTY()
+	FVector VelocityMetersPerSecond;
+
+	UPROPERTY()
+	FTransform Transform;
+};
+
 UCLASS(Abstract, Blueprintable)
 class KRAZYKARTS_API AGoKart : public APawn
 {
 	GENERATED_BODY()
 
 public:
-	// Sets default values for this pawn's properties
 	AGoKart();
 
 protected:
-	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
 
 public:	
-	// Called every frame
 	virtual void Tick(float DeltaTime) override;
 
-
-	// Called to bind functionality to input
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
 private:
+	void SimulateMove(const FGoKartMove& Move);
+	void ClearAcknowledgedMoves(const FGoKartMove& LastMove);
+
 	void MoveForward(float AxisValue);
 	void MoveRight(float AxisValue);
 
 	UFUNCTION(Server, Reliable, WithValidation)
-	void Server_MoveForward(float AxisValue);
+	void Server_SendMove(FGoKartMove Move);
 
-	UFUNCTION(Server, Reliable, WithValidation)
-	void Server_MoveRight(float AxisValue);
-
-	void ApplyRotation(float DeltaTime);
+	void ApplyRotation(const FGoKartMove& Move);
 	void UpdateLocationFromVelocity(float DeltaTime);
 	FVector GetRollingResistance();
 	FVector GetAirResistance();
+	FGoKartMove CreateMove(float DeltaTime);
 
 private:
 	UPROPERTY(VisibleAnywhere, Category = "Components")
@@ -58,15 +89,6 @@ private:
 	
 	UPROPERTY(VisibleAnywhere, Category = "Components")
 	UBoxComponent* BoxCollision;
-
-	UPROPERTY(VisibleAnywhere, Category = "State variables")
-	FVector VelocityMetersPerSecond;
-
-	UPROPERTY(VisibleAnywhere, Category = "State variables")
-	float Throttle = 0.f;
-
-	UPROPERTY(VisibleAnywhere, Category = "State variables")
-	float SteeringThrow = 0.f;
 
 	UPROPERTY(EditAnywhere, Category = "Configuration Variables")
 	float CarMassInKG = 1000.f;
@@ -82,10 +104,21 @@ private:
 
 	UPROPERTY(EditAnywhere, Category = "Configuration Variables")
 	float RollingResistanceCoefficient = 0.015f;
+	
+	UFUNCTION()
+	void OnRep_ServerState();
 
-	UPROPERTY(replicated)
-	FVector ReplicatedLocation;
+	UPROPERTY(ReplicatedUsing = OnRep_ServerState)
+	FGoKartState ServerState;
 
-	UPROPERTY(replicated)
-	FRotator ReplicatedRotation;
+	UPROPERTY()
+	FGoKartMove ServerMove;
+
+	float Throttle;
+	float SteeringThrow;
+
+	UPROPERTY()
+	FVector VelocityMetersPerSecond;
+
+	TArray<FGoKartMove> UnackMoves;
 };
