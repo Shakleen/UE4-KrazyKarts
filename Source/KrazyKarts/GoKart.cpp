@@ -59,19 +59,22 @@ void AGoKart::GetLifetimeReplicatedProps(TArray< FLifetimeProperty >& OutLifetim
 void AGoKart::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-	
-	if (IsLocallyControlled())
+
+	if (GetLocalRole() == ROLE_AutonomousProxy)
 	{
 		FGoKartMove Move = CreateMove(DeltaTime);
-
-		if (!HasAuthority())
-		{
-			UnackMoves.Add(Move);
-			UE_LOG(LogTemp, Warning, TEXT("Moev Queue Length: %d"), UnackMoves.Num());
-		}
-
-		Server_SendMove(Move);
 		SimulateMove(Move);
+		UnackMoves.Add(Move);
+		Server_SendMove(Move);
+	}
+	else if (GetLocalRole() == ROLE_Authority && IsLocallyControlled())
+	{
+		FGoKartMove Move = CreateMove(DeltaTime);
+		Server_SendMove(Move);
+	}
+	else if (GetLocalRole() == ROLE_SimulatedProxy)
+	{
+		SimulateMove(ServerState.LastMove);
 	}
 
 	DrawDebugString(
