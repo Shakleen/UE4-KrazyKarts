@@ -4,30 +4,12 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Pawn.h"
+#include "GoKartMovementComponent.h"
 #include "GoKart.generated.h"
 
 class UCameraComponent;
 class USpringArmComponent;
 class UBoxComponent;
-
-USTRUCT()
-struct FGoKartMove
-{
-	GENERATED_USTRUCT_BODY()
-
-public:
-	UPROPERTY()
-	float Throttle;
-
-	UPROPERTY()
-	float SteeringThrow;
-
-	UPROPERTY()
-	float DeltaTime;
-
-	UPROPERTY()
-	float Time;
-};
 
 USTRUCT()
 struct FGoKartState
@@ -62,7 +44,6 @@ public:
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
 private:
-	void SimulateMove(const FGoKartMove& Move);
 	void ClearAcknowledgedMoves(const FGoKartMove& LastMove);
 
 	void MoveForward(float AxisValue);
@@ -71,11 +52,9 @@ private:
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_SendMove(FGoKartMove Move);
 
-	void ApplyRotation(const FGoKartMove& Move);
-	void UpdateLocationFromVelocity(float DeltaTime);
-	FVector GetRollingResistance();
-	FVector GetAirResistance();
-	FGoKartMove CreateMove(float DeltaTime);
+public:
+	UPROPERTY(ReplicatedUsing = OnRep_ServerState)
+	FGoKartState ServerState;
 
 private:
 	UPROPERTY(VisibleAnywhere, Category = "Components")
@@ -89,36 +68,15 @@ private:
 	
 	UPROPERTY(VisibleAnywhere, Category = "Components")
 	UBoxComponent* BoxCollision;
-
-	UPROPERTY(EditAnywhere, Category = "Configuration Variables")
-	float CarMassInKG = 1000.f;
-
-	UPROPERTY(EditAnywhere, Category = "Configuration Variables")
-	float MaxDrivingForceInNeutons = 10000.f;
-
-	UPROPERTY(EditAnywhere, Category = "Configuration Variables")
-	float MinTurningRadius = 10.f;
-
-	UPROPERTY(EditAnywhere, Category = "Configuration Variables")
-	float DragCoefficient = 16.f;
-
-	UPROPERTY(EditAnywhere, Category = "Configuration Variables")
-	float RollingResistanceCoefficient = 0.015f;
+	
+	UPROPERTY(VisibleAnywhere, Category = "Components")
+	UGoKartMovementComponent* MovementComponent;
 	
 	UFUNCTION()
 	void OnRep_ServerState();
 
-	UPROPERTY(ReplicatedUsing = OnRep_ServerState)
-	FGoKartState ServerState;
-
 	UPROPERTY()
 	FGoKartMove ServerMove;
-
-	float Throttle;
-	float SteeringThrow;
-
-	UPROPERTY()
-	FVector VelocityMetersPerSecond;
 
 	TArray<FGoKartMove> UnackMoves;
 };
