@@ -7,7 +7,7 @@
 
 UGoKartMovementComponent::UGoKartMovementComponent()
 {
-	PrimaryComponentTick.bCanEverTick = false;
+	PrimaryComponentTick.bCanEverTick = true;
 }
 
 void UGoKartMovementComponent::BeginPlay()
@@ -18,6 +18,12 @@ void UGoKartMovementComponent::BeginPlay()
 void UGoKartMovementComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+
+	if (GetOwnerRole() == ROLE_AutonomousProxy || GetOwner()->GetRemoteRole() == ROLE_SimulatedProxy)
+	{
+		LastMove = CreateMove(DeltaTime);
+		SimulateMove(LastMove);
+	}
 }
 
 void UGoKartMovementComponent::SimulateMove(const FGoKartMove& Move)
@@ -47,7 +53,7 @@ void UGoKartMovementComponent::SetVelocity(FVector NewValue)
 	VelocityMetersPerSecond = NewValue;
 }
 
-FVector UGoKartMovementComponent::GetVelocity()
+FVector UGoKartMovementComponent::GetVelocity() const
 {
 	return VelocityMetersPerSecond;
 }
@@ -60,6 +66,11 @@ void UGoKartMovementComponent::SetThrottle(float NewValue)
 void UGoKartMovementComponent::SetSteeringThrow(float NewValue)
 {
 	SteeringThrow = NewValue;
+}
+
+FGoKartMove UGoKartMovementComponent::GetLastMove() const
+{
+	return LastMove;
 }
 
 FVector UGoKartMovementComponent::GetAirResistance()

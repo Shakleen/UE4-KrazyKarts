@@ -44,6 +44,7 @@ AGoKart::AGoKart()
 	AddOwnedComponent(MovementReplicator);
 
 	bReplicates = true;
+	SetReplicateMovement(false);
 }
 
 void AGoKart::BeginPlay()
