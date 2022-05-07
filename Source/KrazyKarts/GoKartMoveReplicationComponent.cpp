@@ -22,7 +22,7 @@ void UGoKartMoveReplicationComponent::TickComponent(float DeltaTime, ELevelTick 
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
-	if (!ensure(MovementComponent != nullptr)) return;
+	if (!MovementComponent) return;
 
 	FGoKartMove Move = MovementComponent->GetLastMove();
 
@@ -43,20 +43,52 @@ void UGoKartMoveReplicationComponent::TickComponent(float DeltaTime, ELevelTick 
 
 void UGoKartMoveReplicationComponent::ClientTick(float DeltaTime)
 {
-	// MovementComponent->SimulateMove(ServerState.LastMove);
 	ClientTimeSinceUpdate += DeltaTime;
 
 	if (ClientTimeSinceUpdate < KINDA_SMALL_NUMBER) return;
+	float Alpha = ClientTimeSinceUpdate / ClientTimeBetweenLastUpdates;
 
-	FVector TargetLocation = ServerState.Transform.GetLocation();
-	float LerpRatio = ClientTimeSinceUpdate / ClientTimeBetweenLastUpdates;
-	FVector StartLocation = ClientStartLocation;
-	FVector NewLocation = FMath::LerpStable(
-		StartLocation,
-		TargetLocation,
-		LerpRatio
-	);
+	FHermiteCubicSpline Spline = CreateSpline();
+	InterpolateLocation(Spline, Alpha);
+	InterpolateVelocity(Spline, Alpha);
+	InterpolateRotation(Alpha);
+}
+
+void UGoKartMoveReplicationComponent::InterpolateRotation(float Alpha)
+{
+	FQuat TargetRotation = ServerState.Transform.GetRotation();
+	FQuat StartRotation = ClientStartTransform.GetRotation();
+	FQuat NewRotation = FQuat::Slerp(StartRotation, TargetRotation, Alpha);
+	GetOwner()->SetActorRotation(NewRotation);
+}
+
+void UGoKartMoveReplicationComponent::InterpolateVelocity(const FHermiteCubicSpline& Spline, float Alpha)
+{
+	FVector NewDerivative = Spline.InterpolateDerivative(Alpha);
+	FVector NewVelocity = NewDerivative / GetVelocityToDerivative();
+	MovementComponent->SetVelocity(NewVelocity);
+}
+
+void UGoKartMoveReplicationComponent::InterpolateLocation(const FHermiteCubicSpline& Spline, float Alpha)
+{
+	FVector NewLocation = Spline.InterpolateLocation(Alpha);
 	GetOwner()->SetActorLocation(NewLocation);
+}
+
+FHermiteCubicSpline UGoKartMoveReplicationComponent::CreateSpline() const
+{
+	FHermiteCubicSpline Spline;
+	Spline.TargetLocation = ServerState.Transform.GetLocation();
+	Spline.StartLocation = ClientStartTransform.GetLocation();
+	float VelocityToDerivative = GetVelocityToDerivative();
+	Spline.StartDerivative = ClientStartVelocity * VelocityToDerivative;
+	Spline.TargetDerivative = ServerState.VelocityMetersPerSecond * VelocityToDerivative;
+	return Spline;
+}
+
+FORCEINLINE float UGoKartMoveReplicationComponent::GetVelocityToDerivative() const
+{
+	return 100 * ClientTimeBetweenLastUpdates;
 }
 
 void UGoKartMoveReplicationComponent::GetLifetimeReplicatedProps(TArray< FLifetimeProperty >& OutLifetimeProps) const
@@ -67,6 +99,8 @@ void UGoKartMoveReplicationComponent::GetLifetimeReplicatedProps(TArray< FLifeti
 
 void UGoKartMoveReplicationComponent::OnRep_ServerState()
 {
+	if (!MovementComponent) return;
+
 	switch (GetOwnerRole())
 	{
 	case ROLE_AutonomousProxy:
@@ -82,8 +116,6 @@ void UGoKartMoveReplicationComponent::OnRep_ServerState()
 
 void UGoKartMoveReplicationComponent::AutonomousProxy_OnRep_ServerState()
 {
-	if (!ensure(MovementComponent != nullptr)) return;
-	
 	GetOwner()->SetActorTransform(ServerState.Transform);
 	MovementComponent->SetVelocity(ServerState.VelocityMetersPerSecond);
 	ClearAcknowledgedMoves(ServerState.LastMove);
@@ -98,7 +130,7 @@ void UGoKartMoveReplicationComponent::SimulatedProxy_OnRep_ServerState()
 {
 	ClientTimeBetweenLastUpdates = ClientTimeSinceUpdate;
 	ClientTimeSinceUpdate = 0.f;
-	ClientStartLocation = GetOwner()->GetActorLocation();
+	ClientStartTransform = GetOwner()->GetActorTransform();
 }
 
 void UGoKartMoveReplicationComponent::ClearAcknowledgedMoves(const FGoKartMove& LastMove)
@@ -117,7 +149,8 @@ void UGoKartMoveReplicationComponent::UpdateServerState(const FGoKartMove& Move)
 
 void UGoKartMoveReplicationComponent::Server_SendMove_Implementation(FGoKartMove Move)
 {
-	if (!ensure(MovementComponent != nullptr)) return;
+	if (!MovementComponent) return;
+
 	MovementComponent->SimulateMove(Move);
 	UpdateServerState(Move);
 }
